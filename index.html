@@ -14,7 +14,7 @@
     .container {
       margin-left: 2cm;
       text-align: left;
-      padding-bottom: 60px; /* Prostor za fiksirana dugmad */
+      padding-bottom: 60px;
     }
     .logo { 
       margin-bottom: 0.5cm;
@@ -78,7 +78,7 @@
     button:hover { 
       background-color: #45a049; 
     }
-    .driver-management { 
+    .driver-management, .vehicle-management { 
       margin-bottom: 20px; 
       display: none;
       background-color: #f9f9f9;
@@ -86,12 +86,12 @@
       border: 1px solid #ccc;
       border-radius: 4px;
     }
-    .driver-management input { 
+    .driver-management input, .vehicle-management input { 
       padding: 5px; 
       margin-right: 10px; 
       font-size: 12px; 
     }
-    .driver-list { 
+    .driver-list, .vehicle-list { 
       margin-top: 10px; 
     }
     .dropdown-btn {
@@ -113,13 +113,28 @@
       background-color: rgba(255, 255, 255, 0.9);
       padding: 10px 0;
     }
+    .export-options {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background-color: #4CAF50;
+      color: white;
+      padding: 10px;
+      border-radius: 4px;
+      z-index: 1000;
+    }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
   <div class="container">
     <div class="logo">
-      <img src="./logo.png" alt="Logo" crossorigin="anonymous" onload="console.log('Logo učitan')" onerror="alert('Greška: Logo fajl nije pronađen!')">
+      <img src="./logo.png" alt="Logo" crossorigin="anonymous" loading="lazy" onload="console.log('Logo učitan')" onerror="alert('Greška: Logo fajl nije pronađen!')">
     </div>
 
     <button class="dropdown-btn" onclick="toggleDriverManagement()">Upravljanje vozačima ▼</button>
@@ -133,19 +148,41 @@
       </div>
     </div>
 
+    <button class="dropdown-btn" onclick="toggleVehicleManagement()">Upravljanje vozilima ▼</button>
+    <div class="vehicle-management" id="vehicle-management">
+      <h3>Upravljanje vozilima</h3>
+      <input type="text" id="new-vehicle" placeholder="Unesi naziv vozila">
+      <button onclick="addVehicle()">Dodaj vozilo</button>
+      <div class="vehicle-list">
+        <h4>Lista vozila:</h4>
+        <ul id="vehicle-list"></ul>
+      </div>
+    </div>
+
     <div id="schedule" class="schedule">
       <div id="tables-container"></div>
       <div class="button-container">
         <button onclick="saveSchedule()">Sačuvaj raspored</button>
-        <button onclick="exportToPng()">Eksportuj kao PNG</button>
+        <div class="export-options">
+          <select id="export-format">
+            <option value="png">PNG</option>
+            <option value="jpeg">JPEG</option>
+          </select>
+          <button onclick="exportImage()">Eksportuj sliku</button>
+        </div>
         <button onclick="resetSchedule()">Resetuj raspored</button>
       </div>
     </div>
   </div>
 
   <script>
-    const vehicles = ['OCTAVIA SIVA', 'ŠKODA PLAVA', 'ASTRA', 'OCTAVIA CRVENA'];
     const days = ['PONEDLJAK', 'UTORAK', 'SREDA', 'ČETVRTAK', 'PETAK', 'SUBOTA', 'NEDELJA'];
+    let vehicles = JSON.parse(localStorage.getItem('vehicles')) || [
+      'OCTAVIA SIVA',
+      'ŠKODA PLAVA',
+      'ASTRA',
+      'OCTAVIA CRVENA'
+    ];
     let scheduleData = {};
     let drivers = [];
 
@@ -165,6 +202,17 @@
       });
     }
 
+    function showToast(message) {
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.innerText = message;
+      document.body.appendChild(toast);
+      setTimeout(() => {
+        toast.remove();
+      }, 3000);
+    }
+
+    // Upravljanje vozačima
     function renderDriverList() {
       const driverList = document.getElementById('driver-list');
       driverList.innerHTML = '';
@@ -175,7 +223,11 @@
         deleteButton.innerText = 'Obriši';
         deleteButton.style.marginLeft = '10px';
         deleteButton.style.backgroundColor = '#ff4444';
-        deleteButton.onclick = () => removeDriver(driver);
+        deleteButton.onclick = () => {
+          if (confirm(`Da li ste sigurni da želite da obrišete vozača ${driver}?`)) {
+            removeDriver(driver);
+          }
+        };
         li.appendChild(deleteButton);
         driverList.appendChild(li);
       });
@@ -185,16 +237,26 @@
     function addDriver() {
       const newDriverInput = document.getElementById('new-driver');
       const newDriver = newDriverInput.value.trim();
-      if (newDriver && !drivers.includes(newDriver)) {
-        drivers.push(newDriver);
-        localStorage.setItem('drivers', JSON.stringify(drivers));
-        newDriverInput.value = '';
-        renderDriverList();
-      } else if (!newDriver) {
+      if (!newDriver) {
         alert('Unesi ime vozača!');
-      } else {
-        alert('Vozač već postoji!');
+        return;
       }
+      if (newDriver.length > 50) {
+        alert('Ime vozača ne sme biti duže od 50 karaktera!');
+        return;
+      }
+      if (/[^a-zA-ZČĆĐŠŽčćđšž\s]/.test(newDriver)) {
+        alert('Ime vozača može sadržati samo slova i razmake!');
+        return;
+      }
+      if (drivers.includes(newDriver)) {
+        alert('Vozač već postoji!');
+        return;
+      }
+      drivers.push(newDriver);
+      localStorage.setItem('drivers', JSON.stringify(drivers));
+      newDriverInput.value = '';
+      renderDriverList();
     }
 
     function removeDriver(driver) {
@@ -207,6 +269,123 @@
       localStorage.setItem('drivers', JSON.stringify(drivers));
       localStorage.setItem('scheduleData', JSON.stringify(scheduleData));
       renderDriverList();
+    }
+
+    function toggleDriverManagement() {
+      const driverManagement = document.getElementById('driver-management');
+      const btn = event.target;
+      if (driverManagement.style.display === 'none') {
+        driverManagement.style.display = 'block';
+        btn.textContent = 'Upravljanje vozačima ▲';
+      } else {
+        driverManagement.style.display = 'none';
+        btn.textContent = 'Upravljanje vozačima ▼';
+      }
+    }
+
+    // Upravljanje vozilima
+    function renderVehicleList() {
+      const vehicleList = document.getElementById('vehicle-list');
+      vehicleList.innerHTML = '';
+      vehicles.forEach(vehicle => {
+        const li = document.createElement('li');
+        li.innerText = vehicle;
+        
+        const editButton = document.createElement('button');
+        editButton.innerText = 'Izmeni';
+        editButton.style.marginLeft = '10px';
+        editButton.style.backgroundColor = '#2196F3';
+        editButton.onclick = () => editVehicle(vehicle);
+        li.appendChild(editButton);
+
+        const deleteButton = document.createElement('button');
+        deleteButton.innerText = 'Obriši';
+        deleteButton.style.marginLeft = '10px';
+        deleteButton.style.backgroundColor = '#ff4444';
+        deleteButton.onclick = () => {
+          if (confirm(`Da li ste sigurni da želite da obrišete vozilo ${vehicle}?`)) {
+            removeVehicle(vehicle);
+          }
+        };
+        li.appendChild(deleteButton);
+
+        vehicleList.appendChild(li);
+      });
+    }
+
+    function addVehicle() {
+      const newVehicleInput = document.getElementById('new-vehicle');
+      const newVehicle = newVehicleInput.value.trim().toUpperCase();
+      if (!newVehicle) {
+        alert('Unesi naziv vozila!');
+        return;
+      }
+      if (newVehicle.length > 50) {
+        alert('Naziv vozila ne sme biti duži od 50 karaktera!');
+        return;
+      }
+      if (vehicles.includes(newVehicle)) {
+        alert('Vozilo već postoji!');
+        return;
+      }
+      vehicles.push(newVehicle);
+      scheduleData[newVehicle] = days.map(() => ['', '', '']);
+      localStorage.setItem('vehicles', JSON.stringify(vehicles));
+      localStorage.setItem('scheduleData', JSON.stringify(scheduleData));
+      newVehicleInput.value = '';
+      renderVehicleList();
+      renderSchedules();
+    }
+
+    function removeVehicle(vehicle) {
+      vehicles = vehicles.filter(v => v !== vehicle);
+      delete scheduleData[vehicle];
+      localStorage.setItem('vehicles', JSON.stringify(vehicles));
+      localStorage.setItem('scheduleData', JSON.stringify(scheduleData));
+      renderVehicleList();
+      renderSchedules();
+    }
+
+    function editVehicle(oldVehicle) {
+      const newName = prompt(`Unesi novi naziv za vozilo ${oldVehicle}:`, oldVehicle);
+      if (newName && newName.trim()) {
+        const newVehicle = newName.trim().toUpperCase();
+        if (vehicles.includes(newVehicle)) {
+          alert('Vozilo sa tim nazivom već postoji!');
+          return;
+        }
+        if (newVehicle.length > 50) {
+          alert('Naziv vozila ne sme biti duži od 50 karaktera!');
+          return;
+        }
+        const index = vehicles.indexOf(oldVehicle);
+        vehicles[index] = newVehicle;
+        scheduleData[newVehicle] = scheduleData[oldVehicle];
+        delete scheduleData[oldVehicle];
+        localStorage.setItem('vehicles', JSON.stringify(vehicles));
+        localStorage.setItem('scheduleData', JSON.stringify(scheduleData));
+        renderVehicleList();
+        renderSchedules();
+      }
+    }
+
+    function toggleVehicleManagement() {
+      const vehicleManagement = document.getElementById('vehicle-management');
+      const btn = event.target;
+      if (vehicleManagement.style.display === 'none') {
+        vehicleManagement.style.display = 'block';
+        btn.textContent = 'Upravljanje vozilima ▲';
+      } else {
+        vehicleManagement.style.display = 'none';
+        btn.textContent = 'Upravljanje vozilima ▼';
+      }
+    }
+
+    // Raspored
+    function generateOptions(selectedValue) {
+      return `<option value="">-</option>` + drivers.map(driver => 
+        `<option value="${driver}" ${selectedValue === driver ? 'selected' : ''}>${driver}</option>`
+      ).join('');
     }
 
     function renderSchedules() {
@@ -233,20 +412,11 @@
         const tbody = document.getElementById(`table-body-${vehicle.replace(/\s+/g, '-')}`);
         days.forEach((day, index) => {
           const row = document.createElement('tr');
-          const options = `<option value="">-</option>` + drivers.map(driver => 
-            `<option value="${driver}" ${scheduleData[vehicle][index][0] === driver ? 'selected' : ''}>${driver}</option>`
-          ).join('');
-          const options2 = `<option value="">-</option>` + drivers.map(driver => 
-            `<option value="${driver}" ${scheduleData[vehicle][index][1] === driver ? 'selected' : ''}>${driver}</option>`
-          ).join('');
-          const options3 = `<option value="">-</option>` + drivers.map(driver => 
-            `<option value="${driver}" ${scheduleData[vehicle][index][2] === driver ? 'selected' : ''}>${driver}</option>`
-          ).join('');
           row.innerHTML = `
             <td class="day">${day}</td>
-            <td><select oninput="updateSchedule('${vehicle}', ${index}, 0, this.value)">${options}</select></td>
-            <td><select oninput="updateSchedule('${vehicle}', ${index}, 1, this.value)">${options2}</select></td>
-            <td><select oninput="updateSchedule('${vehicle}', ${index}, 2, this.value)">${options3}</select></td>
+            <td><select oninput="updateSchedule('${vehicle}', ${index}, 0, this.value)">${generateOptions(scheduleData[vehicle][index][0])}</select></td>
+            <td><select oninput="updateSchedule('${vehicle}', ${index}, 1, this.value)">${generateOptions(scheduleData[vehicle][index][1])}</select></td>
+            <td><select oninput="updateSchedule('${vehicle}', ${index}, 2, this.value)">${generateOptions(scheduleData[vehicle][index][2])}</select></td>
           `;
           tbody.appendChild(row);
         });
@@ -259,49 +429,29 @@
 
     function saveSchedule() {
       localStorage.setItem('scheduleData', JSON.stringify(scheduleData));
-      alert('Raspored je sačuvan!');
+      showToast('Raspored je sačuvan!');
     }
 
     function resetSchedule() {
-      vehicles.forEach(vehicle => {
-        scheduleData[vehicle] = days.map(() => ['', '', '']);
-      });
-      renderSchedules();
-      saveSchedule();
-    }
-
-    function toggleDriverManagement() {
-      const driverManagement = document.getElementById('driver-management');
-      const btn = document.querySelector('.dropdown-btn');
-      if (driverManagement.style.display === 'none') {
-        driverManagement.style.display = 'block';
-        btn.textContent = 'Upravljanje vozačima ▲';
-      } else {
-        driverManagement.style.display = 'none';
-        btn.textContent = 'Upravljanje vozačima ▼';
+      if (confirm('Da li ste sigurni da želite da resetujete raspored? Svi podaci će biti obrisani.')) {
+        vehicles.forEach(vehicle => {
+          scheduleData[vehicle] = days.map(() => ['', '', '']);
+        });
+        localStorage.setItem('scheduleData', JSON.stringify(scheduleData));
+        renderSchedules();
+        showToast('Raspored je resetovan!');
       }
     }
 
-    function exportToPng() {
-      saveSchedule(); // Čuva raspored pre izvoza
-      const logo = document.querySelector('.logo');
-      const tablesContainer = document.getElementById('tables-container');
-      if (!logo || !tablesContainer) {
-        alert('Greška: Logo ili tabele nisu pronađeni!');
-        return;
-      }
-      const logoImg = logo.querySelector('img');
-      if (!logoImg || !logoImg.complete || logoImg.naturalWidth === 0) {
-        alert('Greška: Logo nije učitan. Proveri da li je fajl "logo.png" prisutan i ispravan.');
-        return;
-      }
-
+    // Eksport slike
+    function createTempContainer() {
       const tempContainer = document.createElement('div');
       tempContainer.style.backgroundColor = '#ffffff';
       tempContainer.style.width = '480px';
       tempContainer.style.padding = '0.85cm';
       tempContainer.style.boxSizing = 'border-box';
 
+      const logo = document.querySelector('.logo');
       const logoClone = logo.cloneNode(true);
       tempContainer.appendChild(logoClone);
 
@@ -345,12 +495,31 @@
         tempContainer.appendChild(table);
       });
 
+      return tempContainer;
+    }
+
+    function exportImage() {
+      saveSchedule();
+      const format = document.getElementById('export-format').value;
+      const logo = document.querySelector('.logo');
+      const tablesContainer = document.getElementById('tables-container');
+      if (!logo || !tablesContainer) {
+        alert('Greška: Logo ili tabele nisu pronađeni!');
+        return;
+      }
+      const logoImg = logo.querySelector('img');
+      if (!logoImg || !logoImg.complete || logoImg.naturalWidth === 0) {
+        alert('Greška: Logo nije učitan. Proveri da li je fajl "logo.png" prisutan i ispravan.');
+        return;
+      }
+
+      const tempContainer = createTempContainer();
       document.body.appendChild(tempContainer);
 
       if (logoImg.complete) {
-        renderCanvas(tempContainer);
+        renderCanvas(tempContainer, format);
       } else {
-        logoImg.onload = () => renderCanvas(tempContainer);
+        logoImg.onload = () => renderCanvas(tempContainer, format);
         logoImg.onerror = () => {
           alert('Greška: Logo nije učitan!');
           document.body.removeChild(tempContainer);
@@ -358,7 +527,7 @@
       }
     }
 
-    function renderCanvas(container) {
+    function renderCanvas(container, format) {
       html2canvas(container, { 
         scale: 1,
         backgroundColor: '#ffffff',
@@ -366,21 +535,48 @@
         width: 480,
         height: container.offsetHeight
       }).then(canvas => {
-        const link = document.createElement('a');
-        link.download = `raspored_svih_vozila.png`;
-        link.href = canvas.toDataURL('image/png');
-        link.click();
-        document.body.removeChild(container);
-        alert('Raspored je uspešno izvezen kao PNG!');
+        if (navigator.canShare && format === 'png') {
+          canvas.toBlob(blob => {
+            const file = new File([blob], 'raspored_svih_vozila.png', { type: 'image/png' });
+            if (navigator.canShare({ files: [file] })) {
+              navigator.share({
+                files: [file],
+                title: 'Raspored smena',
+                text: 'Pogledaj raspored smena za ovu nedelju!'
+              }).then(() => {
+                showToast('Slika je podeljena ili sačuvana!');
+              }).catch(error => {
+                console.error('Greška pri deljenju:', error);
+                fallbackDownload(canvas, format);
+              });
+            } else {
+              fallbackDownload(canvas, format);
+            }
+            document.body.removeChild(container);
+          });
+        } else {
+          fallbackDownload(canvas, format);
+          document.body.removeChild(container);
+        }
       }).catch(error => {
-        console.error('Greška pri izvozu PNG-a:', error);
-        alert('Došlo je do greške pri izvozu PNG-a! Proveri konzolu za detalje.');
+        console.error('Greška pri izvozu:', error);
+        alert('Došlo je do greške pri izvozu slike!');
         document.body.removeChild(container);
       });
     }
 
+    function fallbackDownload(canvas, format) {
+      const link = document.createElement('a');
+      link.download = `raspored_svih_vozila.${format}`;
+      link.href = canvas.toDataURL(`image/${format}`, format === 'jpeg' ? 0.9 : 1.0);
+      link.click();
+      showToast(`Slika je preuzeta kao ${format.toUpperCase()}!`);
+    }
+
+    // Inicijalizacija
     loadData();
     renderDriverList();
+    renderVehicleList();
   </script>
 </body>
 </html>
