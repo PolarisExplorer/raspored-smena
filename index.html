@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+  <meta charset="UTF-8">
+  <title>Raspored Smena</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    body { 
+      font-family: 'Roboto', sans-serif; 
+      margin: 0;
+      color: #000000;
+    }
+    .container {
+      margin-left: 2cm;
+      text-align: left;
+    }
+    .logo { 
+      margin-bottom: 0.5cm;
+    }
+    .logo img { 
+      width: 11.49cm;
+      height: 3.71cm;
+      display: block;
+    }
+    .schedule { 
+      margin-bottom: 20px; 
+    }
+    table { 
+      border-collapse: collapse;
+      width: 11cm;
+      margin-bottom: 0.5cm;
+    }
+    th, td { 
+      border: 1px solid black; 
+      height: 0.6cm;
+      padding: 0;
+      text-align: center;
+      line-height: 0.6cm;
+    }
+    th.vehicle-name { 
+      background-color: #A7FFEB;
+      font-weight: bold;
+      font-size: 16px;
+    }
+    th.shift-header { 
+      background-color: #FFF9C4;
+      font-size: 13px;
+    }
+    td.day { 
+      background-color: #E3F2FD;
+      font-weight: bold;
+      width: 30%;
+      font-size: 13px;
+    }
+    td:not(.day) {
+      width: 23.33%;
+    }
+    select { 
+      width: 100%;
+      height: 0.6cm;
+      font-size: 14px;
+      border: none;
+      background: transparent;
+      text-align: center;
+    }
+    button { 
+      padding: 5px 10px; 
+      margin: 5px; 
+      cursor: pointer; 
+      background-color: #4CAF50; 
+      color: white; 
+      border: none; 
+      border-radius: 4px; 
+      font-size: 12px; 
+    }
+    button:hover { 
+      background-color: #45a049; 
+    }
+    .driver-management { 
+      margin-bottom: 20px; 
+      display: none;
+      background-color: #f9f9f9;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    .driver-management input { 
+      padding: 5px; 
+      margin-right: 10px; 
+      font-size: 12px; 
+    }
+    .driver-list { 
+      margin-top: 10px; 
+    }
+    .dropdown-btn {
+      background-color: #2196F3;
+      padding: 8px 15px;
+      font-size: 14px;
+    }
+    .dropdown-btn:hover {
+      background-color: #1976D2;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+      <img src="logo.png" alt="Logo" crossorigin="anonymous" onload="console.log('Logo učitan')" onerror="alert('Greška: Logo fajl nije pronađen!')">
+    </div>
+
+    <button class="dropdown-btn" onclick="toggleDriverManagement()">Upravljanje vozačima ▼</button>
+    <div class="driver-management" id="driver-management">
+      <h3>Upravljanje vozačima</h3>
+      <input type="text" id="new-driver" placeholder="Unesi ime vozača">
+      <button onclick="addDriver()">Dodaj vozača</button>
+      <div class="driver-list">
+        <h4>Lista vozača:</h4>
+        <ul id="driver-list"></ul>
+      </div>
+    </div>
+
+    <div id="schedule" class="schedule">
+      <div id="tables-container"></div>
+      <button onclick="saveSchedule()">Sačuvaj raspored</button>
+      <button onclick="exportToPng()">Eksportuj kao PNG</button>
+      <button onclick="resetSchedule()">Resetuj raspored</button>
+    </div>
+  </div>
+
+  <script>
+    const vehicles = ['OCTAVIA SIVA', 'ŠKODA PLAVA', 'ASTRA', 'OCTAVIA CRVENA'];
+    const days = ['PONEDLJAK', 'UTORAK', 'SREDA', 'ČETVRTAK', 'PETAK', 'SUBOTA', 'NEDELJA'];
+    let scheduleData = {};
+    let drivers = [];
+
+    function loadData() {
+      console.log('Učitavanje podataka');
+      const savedSchedule = localStorage.getItem('scheduleData');
+      if (savedSchedule) {
+        scheduleData = JSON.parse(savedSchedule);
+      }
+      const savedDrivers = localStorage.getItem('drivers');
+      if (savedDrivers) {
+        drivers = JSON.parse(savedDrivers);
+      }
+      vehicles.forEach(vehicle => {
+        if (!scheduleData[vehicle]) {
+          scheduleData[vehicle] = days.map(() => ['', '', '']);
+        }
+      });
+    }
+
+    function renderDriverList() {
+      console.log('Pokreće se renderDriverList');
+      const driverList = document.getElementById('driver-list');
+      driverList.innerHTML = '';
+      drivers.forEach(driver => {
+        const li = document.createElement('li');
+        li.innerText = driver;
+        const deleteButton = document.createElement('button');
+        deleteButton.innerText = 'Obriši';
+        deleteButton.style.marginLeft = '10px';
+        deleteButton.style.backgroundColor = '#ff4444';
+        deleteButton.onclick = () => removeDriver(driver);
+        li.appendChild(deleteButton);
+        driverList.appendChild(li);
+      });
+      renderSchedules();
+    }
+
+    function addDriver() {
+      const newDriverInput = document.getElementById('new-driver');
+      const newDriver = newDriverInput.value.trim();
+      if (newDriver && !drivers.includes(newDriver)) {
+        drivers.push(newDriver);
+        localStorage.setItem('drivers', JSON.stringify(drivers));
+        newDriverInput.value = '';
+        renderDriverList();
+      } else if (!newDriver) {
+        alert('Unesi ime vozača!');
+      } else {
+        alert('Vozač već postoji!');
+      }
+    }
+
+    function removeDriver(driver) {
+      drivers = drivers.filter(d => d !== driver);
+      Object.keys(scheduleData).forEach(vehicle => {
+        scheduleData[vehicle] = scheduleData[vehicle].map(row =>
+          row.map(name => (name === driver ? '' : name))
+        );
+      });
+      localStorage.setItem('drivers', JSON.stringify(drivers));
+      localStorage.setItem('scheduleData', JSON.stringify(scheduleData));
+      renderDriverList();
+    }
+
+    function renderSchedules() {
+      console.log('Pokreće se renderSchedules');
+      const container = document.getElementById('tables-container');
+      console.log('Container:', container);
+      container.innerHTML = '';
+
+      vehicles.forEach(vehicle => {
+        const table = document.createElement('table');
+        table.innerHTML = `
+          <thead>
+            <tr>
+              <th colspan="4" class="vehicle-name">${vehicle}</th>
+            </tr>
+            <tr>
+              <th></th>
+              <th class="shift-header">Smena I</th>
+              <th class="shift-header">Smena II</th>
+              <th class="shift-header">Smena III</th>
+            </tr>
+          </thead>
+          <tbody id="table-body-${vehicle.replace(/\s+/g, '-')}" class="table-body"></tbody>
+        `;
+        container.appendChild(table);
+
+        const tbody = document.getElementById(`table-body-${vehicle.replace(/\s+/g, '-')}`);
+        days.forEach((day, index) => {
+          const row = document.createElement('tr');
+          const options = `<option value="">-</option>` + drivers.map(driver => 
+            `<option value="${driver}" ${scheduleData[vehicle][index][0] === driver ? 'selected' : ''}>${driver}</option>`
+          ).join('');
+          const options2 = `<option value="">-</option>` + drivers.map(driver => 
+            `<option value="${driver}" ${scheduleData[vehicle][index][1] === driver ? 'selected' : ''}>${driver}</option>`
+          ).join('');
+          const options3 = `<option value="">-</option>` + drivers.map(driver => 
+            `<option value="${driver}" ${scheduleData[vehicle][index][2] === driver ? 'selected' : ''}>${driver}</option>`
+          ).join('');
+          row.innerHTML = `
+            <td class="day">${day}</td>
+            <td><select oninput="updateSchedule('${vehicle}', ${index}, 0, this.value)">${options}</select></td>
+            <td><select oninput="updateSchedule('${vehicle}', ${index}, 1, this.value)">${options2}</select></td>
+            <td><select oninput="updateSchedule('${vehicle}', ${index}, 2, this.value)">${options3}</select></td>
+          `;
+          tbody.appendChild(row);
+        });
+      });
+    }
+
+    function updateSchedule(vehicle, row, col, value) {
+      scheduleData[vehicle][row][col] = value;
+      console.log('Ažuriran scheduleData:', scheduleData); // Dijagnostika
+    }
+
+    function saveSchedule() {
+      localStorage.setItem('scheduleData', JSON.stringify(scheduleData));
+      alert('Raspored je sačuvan!');
+    }
+
+    function resetSchedule() {
+      vehicles.forEach(vehicle => {
+        scheduleData[vehicle] = days.map(() => ['', '', '']);
+      });
+      renderSchedules();
+      saveSchedule();
+    }
+
+    function toggleDriverManagement() {
+      const driverManagement = document.getElementById('driver-management');
+      const btn = document.querySelector('.dropdown-btn');
+      if (driverManagement.style.display === 'none') {
+        driverManagement.style.display = 'block';
+        btn.textContent = 'Upravljanje vozačima ▲';
+      } else {
+        driverManagement.style.display = 'none';
+        btn.textContent = 'Upravljanje vozačima ▼';
+      }
+    }
+
+    function exportToPng() {
+      console.log('Pokreće se exportToPng');
+      console.log('scheduleData pre izvoza:', scheduleData); // Dijagnostika
+      const logo = document.querySelector('.logo');
+      const tablesContainer = document.getElementById('tables-container');
+      if (!logo || !tablesContainer) {
+        alert('Greška: Logo ili tabele nisu pronađeni!');
+        return;
+      }
+
+      // Kreiramo privremeni kontejner
+      const tempContainer = document.createElement('div');
+      tempContainer.style.backgroundColor = '#ffffff';
+      tempContainer.style.width = '480px';
+      tempContainer.style.padding = '0.85cm'; // Tvoj izbor
+      tempContainer.style.boxSizing = 'border-box';
+
+      // Kloniramo logo
+      const logoClone = logo.cloneNode(true);
+      const logoImg = logoClone.querySelector('img');
+      logoImg.crossOrigin = 'anonymous';
+      tempContainer.appendChild(logoClone);
+
+      // Generišemo tabele iz scheduleData umesto kloniranja
+      vehicles.forEach(vehicle => {
+        const table = document.createElement('table');
+        table.style.borderCollapse = 'collapse';
+        table.style.width = '11cm';
+        table.style.marginBottom = '0.5cm';
+        table.innerHTML = `
+          <thead>
+            <tr>
+              <th colspan="4" class="vehicle-name">${vehicle}</th>
+            </tr>
+            <tr>
+              <th></th>
+              <th class="shift-header">Smena I</th>
+              <th class="shift-header">Smena II</th>
+              <th class="shift-header">Smena III</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        `;
+        const tbody = table.querySelector('tbody');
+        days.forEach((day, index) => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td class="day">${day}</td>
+            <td><span>${scheduleData[vehicle][index][0] || '-'}</span></td>
+            <td><span>${scheduleData[vehicle][index][1] || '-'}</span></td>
+            <td><span>${scheduleData[vehicle][index][2] || '-'}</span></td>
+          `;
+          const spans = row.querySelectorAll('span');
+          spans.forEach(span => {
+            span.style.display = 'block';
+            span.style.fontSize = '14px';
+            span.style.lineHeight = '0.6cm';
+            span.style.textAlign = 'center';
+          });
+          tbody.appendChild(row);
+        });
+        tempContainer.appendChild(table);
+      });
+
+      document.body.appendChild(tempContainer);
+
+      // Čekamo da se slika učita
+      if (logoImg.complete) {
+        renderCanvas(tempContainer);
+      } else {
+        logoImg.onload = () => renderCanvas(tempContainer);
+        logoImg.onerror = () => {
+          alert('Greška: Logo nije učitan!');
+          document.body.removeChild(tempContainer);
+        };
+      }
+
+      function renderCanvas(container) {
+        html2canvas(container, { 
+          scale: 1,
+          backgroundColor: '#ffffff',
+          useCORS: true,
+          width: 480,
+          height: container.offsetHeight
+        }).then(canvas => {
+          const link = document.createElement('a');
+          link.download = `raspored_svih_vozila.png`;
+          link.href = canvas.toDataURL('image/png');
+          link.click();
+          document.body.removeChild(container);
+        }).catch(error => {
+          console.error('Greška pri izvozu PNG-a:', error);
+          alert('Došlo je do greške pri izvozu PNG-a!');
+          document.body.removeChild(container);
+        });
+      }
+    }
+
+    console.log('Pokreće se inicijalizacija');
+    loadData();
+    renderDriverList();
+  </script>
+</body>
+</html>
