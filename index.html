@@ -2,6 +2,7 @@
 <html lang="sr">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Raspored Smena</title>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
   <style>
@@ -13,6 +14,7 @@
     .container {
       margin-left: 2cm;
       text-align: left;
+      padding-bottom: 60px; /* Prostor za fiksirana dugmad */
     }
     .logo { 
       margin-bottom: 0.5cm;
@@ -100,13 +102,24 @@
     .dropdown-btn:hover {
       background-color: #1976D2;
     }
+    .button-container {
+      position: fixed;
+      bottom: 10px;
+      left: 2cm;
+      right: 0;
+      display: flex;
+      justify-content: flex-start;
+      gap: 10px;
+      background-color: rgba(255, 255, 255, 0.9);
+      padding: 10px 0;
+    }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
   <div class="container">
     <div class="logo">
-      <img src="logo.png" alt="Logo" crossorigin="anonymous" onload="console.log('Logo učitan')" onerror="alert('Greška: Logo fajl nije pronađen!')">
+      <img src="./logo.png" alt="Logo" crossorigin="anonymous" onload="console.log('Logo učitan')" onerror="alert('Greška: Logo fajl nije pronađen!')">
     </div>
 
     <button class="dropdown-btn" onclick="toggleDriverManagement()">Upravljanje vozačima ▼</button>
@@ -122,9 +135,11 @@
 
     <div id="schedule" class="schedule">
       <div id="tables-container"></div>
-      <button onclick="saveSchedule()">Sačuvaj raspored</button>
-      <button onclick="exportToPng()">Eksportuj kao PNG</button>
-      <button onclick="resetSchedule()">Resetuj raspored</button>
+      <div class="button-container">
+        <button onclick="saveSchedule()">Sačuvaj raspored</button>
+        <button onclick="exportToPng()">Eksportuj kao PNG</button>
+        <button onclick="resetSchedule()">Resetuj raspored</button>
+      </div>
     </div>
   </div>
 
@@ -135,7 +150,6 @@
     let drivers = [];
 
     function loadData() {
-      console.log('Učitavanje podataka');
       const savedSchedule = localStorage.getItem('scheduleData');
       if (savedSchedule) {
         scheduleData = JSON.parse(savedSchedule);
@@ -152,7 +166,6 @@
     }
 
     function renderDriverList() {
-      console.log('Pokreće se renderDriverList');
       const driverList = document.getElementById('driver-list');
       driverList.innerHTML = '';
       drivers.forEach(driver => {
@@ -197,11 +210,8 @@
     }
 
     function renderSchedules() {
-      console.log('Pokreće se renderSchedules');
       const container = document.getElementById('tables-container');
-      console.log('Container:', container);
       container.innerHTML = '';
-
       vehicles.forEach(vehicle => {
         const table = document.createElement('table');
         table.innerHTML = `
@@ -245,7 +255,6 @@
 
     function updateSchedule(vehicle, row, col, value) {
       scheduleData[vehicle][row][col] = value;
-      console.log('Ažuriran scheduleData:', scheduleData); // Dijagnostika
     }
 
     function saveSchedule() {
@@ -274,29 +283,28 @@
     }
 
     function exportToPng() {
-      console.log('Pokreće se exportToPng');
-      console.log('scheduleData pre izvoza:', scheduleData); // Dijagnostika
+      saveSchedule(); // Čuva raspored pre izvoza
       const logo = document.querySelector('.logo');
       const tablesContainer = document.getElementById('tables-container');
       if (!logo || !tablesContainer) {
         alert('Greška: Logo ili tabele nisu pronađeni!');
         return;
       }
+      const logoImg = logo.querySelector('img');
+      if (!logoImg || !logoImg.complete || logoImg.naturalWidth === 0) {
+        alert('Greška: Logo nije učitan. Proveri da li je fajl "logo.png" prisutan i ispravan.');
+        return;
+      }
 
-      // Kreiramo privremeni kontejner
       const tempContainer = document.createElement('div');
       tempContainer.style.backgroundColor = '#ffffff';
       tempContainer.style.width = '480px';
-      tempContainer.style.padding = '0.85cm'; // Tvoj izbor
+      tempContainer.style.padding = '0.85cm';
       tempContainer.style.boxSizing = 'border-box';
 
-      // Kloniramo logo
       const logoClone = logo.cloneNode(true);
-      const logoImg = logoClone.querySelector('img');
-      logoImg.crossOrigin = 'anonymous';
       tempContainer.appendChild(logoClone);
 
-      // Generišemo tabele iz scheduleData umesto kloniranja
       vehicles.forEach(vehicle => {
         const table = document.createElement('table');
         table.style.borderCollapse = 'collapse';
@@ -339,7 +347,6 @@
 
       document.body.appendChild(tempContainer);
 
-      // Čekamo da se slika učita
       if (logoImg.complete) {
         renderCanvas(tempContainer);
       } else {
@@ -349,29 +356,29 @@
           document.body.removeChild(tempContainer);
         };
       }
-
-      function renderCanvas(container) {
-        html2canvas(container, { 
-          scale: 1,
-          backgroundColor: '#ffffff',
-          useCORS: true,
-          width: 480,
-          height: container.offsetHeight
-        }).then(canvas => {
-          const link = document.createElement('a');
-          link.download = `raspored_svih_vozila.png`;
-          link.href = canvas.toDataURL('image/png');
-          link.click();
-          document.body.removeChild(container);
-        }).catch(error => {
-          console.error('Greška pri izvozu PNG-a:', error);
-          alert('Došlo je do greške pri izvozu PNG-a!');
-          document.body.removeChild(container);
-        });
-      }
     }
 
-    console.log('Pokreće se inicijalizacija');
+    function renderCanvas(container) {
+      html2canvas(container, { 
+        scale: 1,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        width: 480,
+        height: container.offsetHeight
+      }).then(canvas => {
+        const link = document.createElement('a');
+        link.download = `raspored_svih_vozila.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        document.body.removeChild(container);
+        alert('Raspored je uspešno izvezen kao PNG!');
+      }).catch(error => {
+        console.error('Greška pri izvozu PNG-a:', error);
+        alert('Došlo je do greške pri izvozu PNG-a! Proveri konzolu za detalje.');
+        document.body.removeChild(container);
+      });
+    }
+
     loadData();
     renderDriverList();
   </script>
